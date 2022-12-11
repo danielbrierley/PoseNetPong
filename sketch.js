@@ -1,14 +1,29 @@
 screenWidth = 400
 screenHeight = 400
 
-ballX = screenWidth/2;
+ballX = 30;
 ballY = screenHeight/2;
 ballRad = 10;
 
 ballXVel = 2;
 ballYVel = 1;
 
-paddle = [370, 280, 300, 280]
+paddle = [20, 280, 100, 280]
+paddle = [150, 280, 300, 200]
+
+let a;
+let b;
+
+
+function convRadians(degrees){
+  var pi = Math.PI;
+  return degrees * (pi/180);
+}
+
+function convDegrees(radians){
+  var pi = Math.PI;
+  return radians / (pi/180);
+}
 
 function setup() {
   createCanvas(screenWidth, screenHeight);
@@ -42,7 +57,7 @@ function draw() {
 
   }
 
-  ai = Math.atan(ballXVel/ballYVel)
+  
 
   //console.log(convDegrees(ai))
   
@@ -81,15 +96,54 @@ function draw() {
   }
 
   if (xIntersect >= paddleLeft && xIntersect < paddleRight && xIntersect >= ballLeft && xIntersect < ballRight) {
-    console.log('paddle')
+    //console.log('paddle')
+    ballVel = Math.sqrt(ballXVel**2+ballYVel**2) //2.23
+    ballAngle = Math.atan(ballYVel/ballXVel); //26.6
+
+    paddleAngle = -Math.atan((paddle[3]-paddle[1])/(paddle[2]-paddle[0])) //0
+
+    angle = -((ballAngle+paddleAngle)+paddleAngle) //26.6
+
+    if (ballXVel < 0) {
+      angle += Math.PI
+    }
+
+    
+
+    newXVel = ballVel*Math.cos(angle);
+    newYVel = ballVel*Math.sin(angle);
+    console.log(ballXVel, ballYVel, newXVel, newYVel, ballX, ballY, convDegrees(ballAngle), ballVel, convDegrees(paddleAngle), convDegrees(angle));
+    //console.log
+    
+    a = ballX;
+    b = ballY;
+
+    ballX -= ballXVel;
+    ballY -= ballYVel;
+
+    ballXVel = newXVel;
+    ballYVel = newYVel;
+
+    ballX += ballXVel;
+    ballY += ballYVel;
+    
+    //console.log()
+
+    
   }
 
   //console.log(xIntersect)
 
   background(0);
   fill(255)
-  stroke(255)
+  noStroke()
   circle(ballX, ballY, ballRad*2)
+  stroke(255)
   strokeWeight(4)
   line(paddle[0], paddle[1], paddle[2], paddle[3])
+
+  
+  fill(255,0,0)
+  noStroke()
+  circle(a, b, ballRad*2)
 }
