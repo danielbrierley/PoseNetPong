@@ -1,15 +1,19 @@
-screenWidth = 400
-screenHeight = 400
 
-ballX = 30;
-ballY = screenHeight/2;
-ballRad = 10;
+let video;
+let poseNet;
+let poses = [];
 
-ballXVel = 2;
-ballYVel = 1;
+let screenWidth = 640
+let screenHeight = 480
 
-paddle = [20, 280, 100, 280]
-paddle = [150, 280, 300, 200]
+let ballX = 30;
+let ballY = screenHeight/2;
+let ballRad = 10;
+
+let ballXVel = 2;
+let ballYVel = 1;
+
+let paddles = [[150, 280, 300, 200], [20, 280, 100, 280]]
 
 let a;
 let b;
@@ -27,6 +31,38 @@ function convDegrees(radians){
 
 function setup() {
   createCanvas(screenWidth, screenHeight);
+  video = createCapture(VIDEO);
+  video.size(width, height);
+  
+  poseNet = ml5.poseNet(video, modelReady);
+  
+  
+  poseNet.on('pose', function(results) {poses = results})
+ 
+  video.hide();
+}
+
+function modelReady() {
+  console.log("Model ready");
+}
+
+
+function drawKeypoints() {
+  i = 0;
+  //for (i = 0; i < poses.length; i++) {
+  if(poses[0]) {
+    
+    let pose = poses[i].pose;
+
+    for (let j = 0; j < pose.keypoints.length; j++) {
+      let keypoint = pose.keypoints[j];
+      fill(255,0,0);
+      noStroke();
+      ellipse(keypoint.position.x, keypoint.position.y, 10, 10);
+      textSize(32);
+      //text(j.toString(), keypoint.position.x, keypoint.position.y)
+    }
+  }
 }
 
 function draw() {
@@ -52,98 +88,116 @@ function draw() {
     ballYVel = -ballYVel;
   }
 
+  for (i = 0; i < paddles.length; i++) {
+    paddle = paddles[i]
 
-  if (Math.abs(ballYVel) > Math.abs(ballXVel)) {
+    paddleAngle = -Math.atan((paddle[3]-paddle[1])/(paddle[2]-paddle[0])); //0
 
-  }
 
-  
 
-  //console.log(convDegrees(ai))
-  
-  //GET BALL EQUATION (y = mx + c)
-  mb = ballYVel/ballXVel;
-  cb = ballY-(ballX*mb);
-  //console.log(mb, cb)
+    xDir = ballXVel/Math.abs(ballXVel);
+    yDir = ballYVel/Math.abs(ballYVel);
+    xChange = yDir*ballRad*Math.sin(paddleAngle);
+    yChange = yDir*ballRad*Math.cos(paddleAngle);
 
-  //GET PADDLE EQUATION (y = mx + c)
-  paddleXDiff = paddle[2]-paddle[0];
-  paddleYDiff = paddle[3]-paddle[1];
-  mp = paddleYDiff/paddleXDiff;
-  cp = paddle[1]-(paddle[0]*mp);
-  // console.log(mp, cp)
+    ballXp = ballX+xChange;
+    ballYp = ballY+yChange;
 
-  //CALCULATE INTERSECTION POINT by solving equations for x
-  xIntersect = (cp-cb)/(mb-mp)
+    //console.log(xChange, yChange, xDir, yDir)
+    //console.log(convDegrees(ai))
+    
+    //GET BALL EQUATION (y = mx + c)
+    mb = ballYVel/ballXVel;
+    cb = ballYp-(ballXp*mb);
+    //console.log(mb, cb)
 
-  if (paddle[0] <= paddle[2]) {
-    paddleLeft  = paddle[0]; 
-    paddleRight = paddle[2];
-  } 
-  else {
-    paddleLeft  = paddle[2]; 
-    paddleRight = paddle[0];
-  }
+    //GET PADDLE EQUATION (y = mx + c)
+    paddleXDiff = paddle[2]-paddle[0];
+    paddleYDiff = paddle[3]-paddle[1];
+    mp = paddleYDiff/paddleXDiff;
+    cp = paddle[1]-(paddle[0]*mp);
+    // console.log(mp, cp)
 
-  ballPrev = ballX-ballXVel;
-  if (ballPrev <= ballX) {
-    ballLeft = ballPrev;
-    ballRight = ballX;
-  }
-  else {
-    ballLeft = ballX;
-    ballRight = ballPrev;
-  }
+    //CALCULATE INTERSECTION POINT by solving equations for x
+    xIntersect = (cp-cb)/(mb-mp)
 
-  if (xIntersect >= paddleLeft && xIntersect < paddleRight && xIntersect >= ballLeft && xIntersect < ballRight) {
-    //console.log('paddle')
-    ballVel = Math.sqrt(ballXVel**2+ballYVel**2) //2.23
-    ballAngle = Math.atan(ballYVel/ballXVel); //26.6
-
-    paddleAngle = -Math.atan((paddle[3]-paddle[1])/(paddle[2]-paddle[0])) //0
-
-    angle = -((ballAngle+paddleAngle)+paddleAngle) //26.6
-
-    if (ballXVel < 0) {
-      angle += Math.PI
+    if (paddle[0] <= paddle[2]) {
+      paddleLeft  = paddle[0]; 
+      paddleRight = paddle[2];
+    } 
+    else {
+      paddleLeft  = paddle[2]; 
+      paddleRight = paddle[0];
     }
 
-    
+    ballPrev = ballXp-ballXVel;
+    if (ballPrev <= ballXp) {
+      ballLeft = ballPrev;
+      ballRight = ballXp;
+    }
+    else {
+      ballLeft = ballXp;
+      ballRight = ballPrev;
+    }
 
-    newXVel = ballVel*Math.cos(angle);
-    newYVel = ballVel*Math.sin(angle);
-    console.log(ballXVel, ballYVel, newXVel, newYVel, ballX, ballY, convDegrees(ballAngle), ballVel, convDegrees(paddleAngle), convDegrees(angle));
-    //console.log
-    
-    a = ballX;
-    b = ballY;
+    if (xIntersect >= paddleLeft && xIntersect < paddleRight && xIntersect >= ballLeft && xIntersect < ballRight) {
+      //console.log('paddle')
+      ballVel = Math.sqrt(ballXVel**2+ballYVel**2) //2.23
+      ballAngle = Math.atan(ballYVel/ballXVel); //26.6
 
-    ballX -= ballXVel;
-    ballY -= ballYVel;
+      paddleAngle = -Math.atan((paddle[3]-paddle[1])/(paddle[2]-paddle[0])) //0
 
-    ballXVel = newXVel;
-    ballYVel = newYVel;
+      angle = -((ballAngle+paddleAngle)+paddleAngle) //26.6
 
-    ballX += ballXVel;
-    ballY += ballYVel;
-    
-    //console.log()
+      if (ballXVel < 0) {
+        angle += Math.PI
+      }
 
-    
+      
+
+      newXVel = ballVel*Math.cos(angle);
+      newYVel = ballVel*Math.sin(angle);
+      //console.log(ballXVel, ballYVel, newXVel, newYVel, ballXp, ballYp, convDegrees(ballAngle), ballVel, convDegrees(paddleAngle), convDegrees(angle));
+      //console.log
+      
+      a = ballX;
+      b = ballY;
+
+      ballX -= ballXVel;
+      ballY -= ballYVel;
+
+      ballXVel = newXVel;
+      ballYVel = newYVel;
+
+      ballX += ballXVel;
+      ballY += ballYVel;
+      
+      //console.log()
+
+      
+    }
   }
 
   //console.log(xIntersect)
 
   background(0);
+  image(video, 0, 0, width, height);
   fill(255)
   noStroke()
   circle(ballX, ballY, ballRad*2)
   stroke(255)
   strokeWeight(4)
-  line(paddle[0], paddle[1], paddle[2], paddle[3])
+  for (i = 0; i < paddles.length; i++) {
+    paddle = paddles[i]
+    line(paddle[0], paddle[1], paddle[2], paddle[3]);
+  }
 
   
   fill(255,0,0)
   noStroke()
-  circle(a, b, ballRad*2)
+  //circle(a, b, ballRad*2)
+  fill(0,255,0)
+  //circle(ballXp, ballYp, 2)
+
+  drawKeypoints()
 }
