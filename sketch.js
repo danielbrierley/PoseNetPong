@@ -2,6 +2,8 @@
 let video;
 let poseNet;
 let poses = [];
+let predictions = [];
+let handpose;
 
 let screenWidth = 640
 let screenHeight = 480
@@ -13,12 +15,15 @@ let ballRad = 10;
 let ballXVel = 2;
 let ballYVel = 1;
 
-let paddles = [[150, 280, 300, 200], [20, 280, 100, 280]]
+let paddles = []
 
 let a;
 let b;
 
-let modelLoaded = true;
+let modelsLoaded = 0;
+let modelLoaded = false;
+let handposeLoaded = false;
+let posenetLoaded = false;
 
 
 function convRadians(degrees){
@@ -33,22 +38,52 @@ function convDegrees(radians){
 
 function setup() {
   createCanvas(screenWidth, screenHeight);
-  // video = createCapture(VIDEO);
-  // video.size(width, height);
+  video = createCapture(VIDEO);
+  video.size(width, height);
   
-  // poseNet = ml5.poseNet(video, modelReady);
-  
-  
-  // poseNet.on('pose', function(results) {poses = results})
+  poseNet = ml5.poseNet(video, posenetReady2);
+
  
-  // video.hide();
+  video.hide();
 }
 
-function modelReady() {
-  console.log("Model ready");
+function posenetReady2() {
   modelLoaded = true;
+  handposeLoaded = true;
+  poseNet.on('pose', posenetCallback)
+  //poseNet.off('pose', posenetCallback);
 }
 
+function posenetReady() {
+  console.log("PoseNet ready");
+  posenetLoaded = true;
+  handpose = ml5.handpose(video, handposeReady);
+  
+}
+
+function handposeReady() {
+  console.log("HandPose ready");
+  modelLoaded = true;
+  handposeLoaded = true;
+  handpose.on("predict", handposeCallback);
+  handpose.off("predict", handposeCallback);
+  poseNet.on('pose', posenetCallback)
+  poseNet.off('pose', posenetCallback);
+  handpose = null;
+  //handpose.off("predict");
+}
+
+function posenetCallback(results) {
+  poses = results
+}
+
+function handposeCallback(results) {
+  predictions = results
+}
+
+function setPaddles() {
+
+}
 
 function drawKeypoints() {
   i = 0;
@@ -63,7 +98,27 @@ function drawKeypoints() {
       noStroke();
       ellipse(keypoint.position.x, keypoint.position.y, 10, 10);
       textSize(32);
-      //text(j.toString(), keypoint.position.x, keypoint.position.y)
+      text(j.toString(), keypoint.position.x, keypoint.position.y)
+    }
+  }
+  if (predictions[0]) {
+    //console.log(predictions.length);
+    p = 0
+    //for (p = 0; p < predictions.length; p++) {
+        
+    const prediction = predictions[p];
+    //console.log(prediction.landmarks);
+    for (let j = 0; j < prediction.landmarks.length; j += 1) {
+      const keypoint = prediction.landmarks[j];
+
+      //stroke(0,255,0);
+      //line(keypoint[0], keypoint[1], oldKeypoint[0], oldKeypoint[1]);      
+      fill(0, 255, 0);
+      noStroke();
+      ellipse(keypoint[0], keypoint[1], 10, 10);
+      //textSize(32);
+      //text(j.toString(), keypoint[0], keypoint[1])
+      oldKeypoint = keypoint;
     }
   }
 }
@@ -149,7 +204,7 @@ function draw() {
         ballVel = Math.sqrt(ballXVel**2+ballYVel**2) //2.23
         ballAngle = Math.atan(ballYVel/ballXVel); //26.6
   
-        paddleAngle = -Math.atan((paddle[3]-paddle[1])/(paddle[2]-paddle[0])) //0
+        paddleAngle = -Math.atan(paddleYDiff/paddleXDiff) //0
   
         angle = -((ballAngle+paddleAngle)+paddleAngle) //26.6
   
@@ -185,7 +240,7 @@ function draw() {
     //console.log(xIntersect)
   
     background(0);
-    // image(video, 0, 0, width, height);
+    image(video, 0, 0, width, height);
     fill(255)
     noStroke()
     circle(ballX, ballY, ballRad*2)
@@ -203,13 +258,19 @@ function draw() {
     fill(0,255,0)
     //circle(ballXp, ballYp, 2)
   
-    // drawKeypoints()
+    drawKeypoints()
 
   }
   else {
     background(0);
     fill(255)
     text('Model loading...', 0, 20);
+    if (posenetLoaded)  {
+      text('PoseNet Loaded', 0, 40);
+    }
+    if (handposeLoaded)  {
+      text('HandPose Loaded', 0, 60);
+    }
 
   }
 }
