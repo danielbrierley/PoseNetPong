@@ -26,14 +26,18 @@ let modelLoaded = false;
 let handposeLoaded = false;
 let posenetLoaded = false;
 
-let screen = 1; //0: load, 1: game, 2: menu
+let screen = 0; //0: load, 1: game, 2: menu
 
-let showFramerate = true;
+const showFramerate = false;
 
 let fingerTips = [4, 8, 12, 16, 20]
 
 let triggers = [];
 let trig = false;
+let trigTimeout = 0;
+
+let accuTime = 0;
+let life = 3;
 
 function convRadians(degrees){
   var pi = Math.PI;
@@ -51,33 +55,38 @@ function setup() {
   video.size(width, height);
   
   
-  poseNet = ml5.poseNet(video, {flipHorizontal: true}, posenetReady2);
+  //Initialise PoseNet
+  poseNet = ml5.poseNet(video, {flipHorizontal: true}, posenetReady);
   //handpose = ml5.handpose(video, handposeReady);
 
  
   video.hide();
 }
 
-function posenetReady2() {
+function posenetReady2() { //Load only PoseNet
   modelLoaded = true;
   handposeLoaded = true;
+  screen = 1;
+  //Turn on PoseNet;
   poseNet.on('pose', posenetCallback);
   //poseNet.on('pose', posenetCallback)
   //poseNet.off('pose', posenetCallback);
 }
 
-function posenetReady() {
+function posenetReady() { //Load PoseNet
   console.log("PoseNet ready");
   posenetLoaded = true;
+  //Load HandPose once PoseNet is ready
   handpose = ml5.handpose(video, {flipHorizontal: true}, handposeReady);
   
 }
 
-function handposeReady() {
+function handposeReady() {  //Load HandPose
   console.log("HandPose ready");
   modelLoaded = true;
   handposeLoaded = true;
   screen = 2;
+  //Turn on Handpose
   handpose.on("predict", handposeCallback);
   //handpose.off("predict", handposeCallback);
   //poseNet.off('pose', posenetCallback);
@@ -93,9 +102,6 @@ function handposeCallback(results) {
   predictions = results
 }
 
-function setPaddles() {
-
-}
 
 function drawKeypoints() {
   i = 0;
@@ -109,11 +115,12 @@ function drawKeypoints() {
       let keypoint = pose.keypoints[j];
       fill(255,0,0);
       noStroke();
-      ellipse(keypoint.position.x, keypoint.position.y, 10, 10);
+      //ellipse(keypoint.position.x, keypoint.position.y, 10, 10);
       textSize(32);
-      text(j.toString(), keypoint.position.x, keypoint.position.y)
+      //text(j.toString(), keypoint.position.x, keypoint.position.y)
     }
 
+    //Map ears to paddle
     for (p = 0; p < paddleMappers.length; p++) {
       pos1 = pose.keypoints[paddleMappers[p][0]].position
       pos2 = pose.keypoints[paddleMappers[p][1]].position
@@ -143,11 +150,12 @@ function drawHandposeKeypoints() {
       noStroke();
       ellipse(keypoint[0], keypoint[1], 10, 10);
       textSize(32);
-      text(j.toString(), keypoint[0], keypoint[1])
+      //text(j.toString(), keypoint[0], keypoint[1])
       oldKeypoint = keypoint;
     }
 
 
+    //Get coordinates from IDs
     shape = fingerTips;
     fill(255,0,0)
     fingerTipPos = [];
@@ -161,11 +169,14 @@ function drawHandposeKeypoints() {
       }
     }
 
+
     handWidth = distance(prediction.landmarks[5], prediction.landmarks[17]);
 
+    
+    //Calculate mid hand position
     avgx = 0;
     avgy = 0;
-    //bias average to the thumb
+    //bias average towards the thumb
     thumbWeight = 3;
     avgx += fingerTipPos[0][0]*thumbWeight;
     avgy += fingerTipPos[0][1]*thumbWeight;
@@ -178,15 +189,18 @@ function drawHandposeKeypoints() {
     avg = [avgx, avgy];
     ellipse(avgx, avgy, 10, 10);
 
+    //Detect if hand is closed
     handOpen = distance(avg, prediction.landmarks[4])/handWidth;
     if (handOpen <= 0.5) {
       if (!trig) {
         triggers.push(avg);
         trig = avg;
       }
+      trigTimeout += 1;
     }
     else {
       trig = false; 
+      trigTimeout = 0;
     }
 
 
@@ -230,6 +244,11 @@ function processBall() {
   if (ballY >= screenHeight-ballRad) { //bottom
     ballY -= ballYVel*ballVelM;
     ballYVel = -ballYVel;
+    //score += 1;
+    screen = 3;
+    poseNet.off('pose', posenetCallback);
+    handpose.on("predict", handposeCallback);
+    //debug.innerHTML = score;
   }
 
   for (i = 0; i < paddles.length; i++) { //paddles
@@ -265,6 +284,7 @@ function processBall() {
     //CALCULATE INTERSECTION POINT by solving equations for x
     xIntersect = (cp-cb)/(mb-mp)
 
+    //Set left/right value
     if (paddle[0] <= paddle[2]) {
       paddleLeft  = paddle[0]; 
       paddleRight = paddle[2];
@@ -274,7 +294,7 @@ function processBall() {
       paddleRight = paddle[0];
     }
 
-    ballPrev = ballXp-ballXVel;
+    ballPrev = ballXp-(ballXVel*ballVelM);
     if (ballPrev <= ballXp) {
       ballLeft = ballPrev;
       ballRight = ballXp;
@@ -284,8 +304,9 @@ function processBall() {
       ballRight = ballPrev;
     }
 
-    if (xIntersect >= paddleLeft && xIntersect < paddleRight && xIntersect >= ballLeft && xIntersect < ballRight) {
+    if (xIntersect >= paddleLeft && xIntersect < paddleRight && xIntersect >= ballLeft && xIntersect < ballRight) { //Collision
       //console.log('paddle')
+      //Calculate magnitude and direction
       ballVel = Math.sqrt(ballXVel**2+ballYVel**2) //2.23
       ballAngle = Math.atan(ballYVel/ballXVel); //26.6
 
@@ -298,7 +319,7 @@ function processBall() {
       }
 
       
-
+      //Calculate new velocity
       newXVel = ballVel*Math.cos(angle);
       newYVel = ballVel*Math.sin(angle);
       //console.log(ballXVel, ballYVel, newXVel, newYVel, ballXp, ballYp, convDegrees(ballAngle), ballVel, convDegrees(paddleAngle), convDegrees(angle));
@@ -307,6 +328,7 @@ function processBall() {
       a = ballX;
       b = ballY;
 
+      //Roll back position and go to new pos
       ballX -= ballXVel*ballVelM;
       ballY -= ballYVel*ballVelM;
 
@@ -325,7 +347,8 @@ function processBall() {
 }
 
 function draw() {
-  if (screen == 1) {
+  //Game screen
+  if (screen == 1) { 
     
     processBall();
   
@@ -352,29 +375,45 @@ function draw() {
   
     drawKeypoints()
 
+    
+    //Display timer at top
+    stroke(255);
+    strokeWeight(1);
+    fill(255);
+    textSize(50);
+    textAlign(RIGHT,TOP);
+    text(""+Math.round(accuTime), screenWidth-10, 20);
+
+    accuTime += deltaTime/1000;
+    //debug.innerHTML = accuTime
 
 
   }
+
+  //Start screeen
   else if (screen == 2) {
     background(0);
 
+    fill(255)
     rect(screenWidth/4, screenHeight/2-20, screenWidth/2, 90);
 
     stroke(0);
     strokeWeight(10);
     fill(255);
     textSize(50);
-    textAlign(CENTER);
+    textAlign(CENTER, TOP);
     text("PLAY", screenWidth/2, screenHeight/2);
 
     drawHandposeKeypoints();
 
-    debug.innerHTML = trig;
-    console.log(trig);
+    //debug.innerHTML = trigTimeout;
+    //console.log(trig);
 
-    if (trig[1] >= screenHeight/2-40 && trig[1] <= screenHeight/2+100 && trig[0] >= screenWidth/4 && trig[0] <= screenWidth*3/4) {
+    if (trig[1] >= screenHeight/2-40 && trig[1] <= screenHeight/2+100 && trig[0] >= screenWidth/4 && trig[0] <= screenWidth*3/4 && trigTimeout >= 15) { //Button click
       console.log(1);
       screen = 1;
+      trig = false;
+      trigTimeout = 0;
       poseNet.on('pose', posenetCallback);
       handpose.off("predict", handposeCallback);
     }
@@ -382,20 +421,22 @@ function draw() {
     
 
 
-    for (let j = 0; j < triggers.length; j += 1) {
+    for (let j = 0; j < triggers.length; j += 1) { // Draw history of where on screen has been activated
       const keypoint = triggers[j];
 
       //stroke(0,255,0);
       //line(keypoint[0], keypoint[1], oldKeypoint[0], oldKeypoint[1]);      
       fill(0, 0, 255);
       noStroke();
-      ellipse(keypoint[0], keypoint[1], 10, 10);
+      //ellipse(keypoint[0], keypoint[1], 10, 10);
       textSize(32);
-      text(j.toString(), keypoint[0], keypoint[1])
+      //text(j.toString(), keypoint[0], keypoint[1])
     }
     
   }
-  else {
+  
+  //Load screen
+  else if (screen == 0) {
     background(0);
     fill(255)
     textSize(20);
@@ -407,6 +448,49 @@ function draw() {
       text('HandPose Loaded', 0, 60);
     }
 
+  }
+
+  //End screen
+  else if (screen == 3) {
+    
+    background(0);
+    stroke(255);
+    strokeWeight(1);
+    fill(255);
+    textSize(50);
+    textAlign(CENTER);
+    text("GAME OVER", screenWidth/2, 50);
+    text(""+Math.round(accuTime), screenWidth/2, 200);
+    
+    textSize(20);
+    text("You survived", screenWidth/2, 170);
+    text("seconds", screenWidth/2, 260);
+
+
+    fill(255)
+    rect(screenWidth/4, screenHeight/2+80, screenWidth/2, 90);
+
+    stroke(0);
+    strokeWeight(10);
+    fill(255);
+    textSize(50);
+    textAlign(CENTER, TOP);
+    text("PLAY AGAIN", screenWidth/2, screenHeight/2+100);
+    
+    drawHandposeKeypoints();
+
+    //debug.innerHTML = trigTimeout;
+    //console.log(trig);
+
+    if (trig[1] >= screenHeight/2+80 && trig[1] <= screenHeight/2+170 && trig[0] >= screenWidth/4 && trig[0] <= screenWidth*3/4 && trigTimeout >= 15) { //Button click
+      //console.log(1);
+      screen = 1;
+      trig = false;
+      trigTimeout = 0;
+      accuTime = 0;
+      poseNet.on('pose', posenetCallback);
+      handpose.off("predict", handposeCallback);
+    }
   }
 
 
